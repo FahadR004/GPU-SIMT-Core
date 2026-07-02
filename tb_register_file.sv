@@ -1,3 +1,5 @@
+// Code your testbench here
+// or browse Examples
 `timescale 1ns/1ps
 
 module tb_register_file;
@@ -68,8 +70,7 @@ task automatic write_reg_file(
         write_mask = write_mask_;
         for (i = 0; i < NUM_THREADS; i = i + 1)
             begin
-            write_data[i] = i;
-        $display("%d", write_data[i]);
+                write_data[i] = i;
             end
             
         @(posedge clk);
