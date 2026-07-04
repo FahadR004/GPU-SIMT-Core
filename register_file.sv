@@ -1,121 +1,71 @@
 `timescale 1ns/1ps
-
-module tb_register_file;
-
-parameter NUM_WARPS       = 4;
-parameter NUM_THREADS     = 32;
-parameter NUM_REGS_PER_TH = 32;
-parameter DATA_WIDTH      = 32;
-
-logic clk;
-logic rst_n;
-
-logic [$clog2(NUM_WARPS)-1:0] read_warp;        
-logic [$clog2(NUM_REGS_PER_TH)-1:0] regA;
-logic [$clog2(NUM_REGS_PER_TH)-1:0] regB;
-logic [DATA_WIDTH-1:0] read_data_a [NUM_THREADS-1:0];
-logic [DATA_WIDTH-1:0] read_data_b [NUM_THREADS-1:0];
-
-logic write_en; 
-logic [DATA_WIDTH-1:0] write_data [NUM_THREADS-1:0];
-logic [NUM_THREADS-1:0] write_mask; 
-logic [$clog2(NUM_WARPS)-1:0] write_warp;
-logic [$clog2(NUM_REGS_PER_TH)-1:0] write_reg;
+module register_file #(
+    parameter NUM_WARPS = 4,
+    parameter NUM_THREADS = 32,
+    parameter NUM_REGS_PER_TH = 32,
+    parameter DATA_WIDTH = 32
+) ( 
+    input logic clk,
+    input logic rst_n,
     
-integer t, i;
-
-register_file #(
-    .NUM_WARPS(NUM_WARPS),
-    .NUM_THREADS(NUM_THREADS),
-    .NUM_REGS_PER_TH(NUM_REGS_PER_TH),
-    .DATA_WIDTH(DATA_WIDTH)
-) dut (
-    .clk(clk),
-    .rst_n(rst_n),
-    
-    .read_warp(read_warp),
-    .regA(regA),
-    .regB(regB),
-    .read_data_a(read_data_a), // Output
-    .read_data_b(read_data_b), // Output
-    
-    .write_en(write_en),
-    .write_data(write_data),
-    .write_mask(write_mask),
-    .write_warp(write_warp),
-    .write_reg(write_reg)
+    input logic [$clog2(NUM_WARPS)-1:0] read_warp,        
+    input logic [$clog2(NUM_REGS_PER_TH)-1:0] regA,
+    input logic [$clog2(NUM_REGS_PER_TH)-1:0] regB,
+    output logic [DATA_WIDTH-1:0] read_data_a [NUM_THREADS-1:0],
+    output logic [DATA_WIDTH-1:0] read_data_b [NUM_THREADS-1:0],
+   
+    input logic write_en, 
+    input logic [DATA_WIDTH-1:0] write_data [NUM_THREADS-1:0],
+    input logic [NUM_THREADS-1:0] write_mask, // For branch divergence
+    input logic [$clog2(NUM_WARPS)-1:0] write_warp,
+    input logic [$clog2(NUM_REGS_PER_TH)-1:0] write_reg
 );
 
-initial clk = 1'b0;
-always #5 clk = ~clk;
+logic [DATA_WIDTH-1:0] reg_file [NUM_THREADS-1:0][NUM_WARPS-1:0][NUM_REGS_PER_TH-1:0];
 
-initial begin
-    $dumpfile("register_file.vcd");
-    $dumpvars(0, tb_register_file);
-end
+// integer init_t, init_w, init_r;
+// initial begin
+//     for (init_t = 0; init_t < NUM_THREADS; init_t = init_t + 1)
+//         for (init_w = 0; init_w < NUM_WARPS; init_w = init_w + 1)
+//             for (init_r = 0; init_r < NUM_REGS_PER_TH; init_r = init_r + 1)
+//                 reg_file[init_t][init_w][init_r] = {DATA_WIDTH{1'b0}};
+// end
 
-task automatic write_reg_file(
-    input logic write_en_,
-    input logic [$clog2(NUM_WARPS)-1:0] write_warp_,
-    input logic [$clog2(NUM_REGS_PER_TH)-1:0] write_reg_,
-    input logic [NUM_THREADS-1:0] write_mask_
-);
-    begin
-        @(negedge clk);
-        write_en = write_en_;
-        write_warp = write_warp_;
-        write_reg = write_reg_;
-        write_mask = write_mask_;
-        for (i = 0; i < NUM_THREADS; i = i + 1)
+ 
+// Write Data
+integer t,w,r;
+integer i;
+always_ff @(posedge clk or negedge rst_n)  
+    begin 
+        if (!rst_n) 
             begin
-            write_data[i] = i;
-        $display("%d", write_data[i]);
+                for (t = 0; t < NUM_THREADS; t = t + 1) 
+                    for (w = 0; w < NUM_WARPS; w = w + 1)
+                        for (r = 0; r < NUM_REGS_PER_TH; r = r + 1)
+                            reg_file[t][w][r] <=  {DATA_WIDTH{1'b0}};  
+            end        
+        else if (write_en)
+            begin
+                for (i = 0; i < NUM_THREADS; i = i + 1)
+                    begin
+                        if (write_mask[i])
+                            reg_file[i][write_warp][write_reg] <= write_data[i];
+                    end
             end
-            
-        @(posedge clk);
-        #1;
-        
     end
-    endtask
-initial 
-    begin
-        rst_n      = 1'b0;
-        write_en   = 1'b0;
-        write_warp = '0;
-        write_reg  = '0;
-        write_mask = '0;
-        read_warp  = '0;
-        regA       = '0;
-        regB       = '0;
 
-        repeat (2) @(posedge clk); 
-
-        rst_n = 1'b1;
-        @(posedge clk);#1;
-
-        // Check reset worked ? should all print 0
-        read_warp = 2'b00;
-        regA = 5'b00000;
-        for (t = 0; t < NUM_THREADS; t = t + 1)
-            $display("POST-RESET Thread %0d regA=%0d", t, read_data_a[t]);
-
-        write_reg_file(1'b1, 2'b00, 5'b00010, {NUM_THREADS{1'b1}});
-        write_reg_file(1'b1, 2'b00, 5'b00011, 32'h5555_5555);
-
-        write_en = 1'b0;
-        read_warp = 2'b00; 
-        regA = 5'b00010;
-        regB = 5'b00011;
-        
-        @(posedge clk); #1;
-
-        for (t = 0; t < NUM_THREADS; t = t + 1)
-            $display("Warp %d, Thread %d: RegA= %d, RegB= %d", read_warp, t, read_data_a[t], read_data_b[t]);
-
-        @(posedge clk);
-
-        $finish;
+// Read Data
+// In a CPU, we would have instructions from the same thread run after another meaning we can have RAW hazard meaning it should read after write but the dependent instruction is unable to read updated value and reads old value
+// In a GPU, warp will go through the ALU, which has a 2-cycle latency, so, warp 0 executes an instruction in 4 cycles. Remember, all threads in a warp execute the same instruction. Thus, the warp moves to the next instruction after 4 cycles making it impossible to create a RAW hazard, assuming that the scheduler would do latency hiding through warp switching (which is present in GPUs) and schedule the next warp to read from the register file, making our 4 warps come in handy.
+integer th;
+always_comb
+    begin 
+        begin
+            for (th = 0; th < NUM_THREADS; th = th + 1)
+                begin
+                    read_data_a[th] = reg_file[th][read_warp][regA];
+                    read_data_b[th] = reg_file[th][read_warp][regB];
+                end
+        end 
     end
-    
-
 endmodule
