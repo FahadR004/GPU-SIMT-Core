@@ -122,13 +122,12 @@ initial
         $display(">>> Resolving conflict...");
         thread_stall = '0;
 
-        repeat(6) begin
-          @(posedge clk); #1;
-          $display("warp_id=%0d active_mask=%h state[3]=%0d",
-                   warp_id_out, active_mask_out, dut.state[3]);
+        repeat (8) begin
+          #1;
+          $display("warp_id=%0d active_mask=%h state[3]=%0d rr_ptr=%0d",
+                   warp_id_out, active_mask_out, dut.state[3], dut.rr_ptr);
+          @(posedge clk);
         end
-        // Resolve conflict
-        thread_stall = '0;
         
         repeat(6) begin
             @(posedge clk); #1;

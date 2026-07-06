@@ -46,10 +46,9 @@ always @(*) // /always_comb. Used @(*) for icarus verilog
         warp_found = 0;
         for (w = 0; w < NUM_WARPS; w++) begin
             if (!warp_found) begin
-                // Calculate wrapped pointer index: (rr_ptr + i) % NUM_WARPS
                 current_idx = (rr_ptr + w >= NUM_WARPS) ? (rr_ptr + w - NUM_WARPS) : (rr_ptr + w);
-                
-                if (state[current_idx] == READY) begin
+                if (state[current_idx] == READY ||
+                    (state[current_idx] == STALLED && !(|thread_stall))) begin // Meaning the stalled warp which no longer has any stalled threads can be selected to run 
                     selected_warp = current_idx;
                     warp_found = 1;
                 end
@@ -130,12 +129,17 @@ always @(posedge clk or negedge rst_n)
                     STALLED: 
                         begin
                             if (!(|thread_stall)) // Reduction OR operator. If no thread is stalled, go to READY state
-                                begin           
-                                    state[w] <= READY;
+                                begin
+                                    if (selected_warp == w && warp_found) 
+                                        begin
+                                            state[w]    <= RUNNING;
+                                            pipe_age[w] <= 2'b00;   // fresh run for the replayed lanes
+                                        end
+                                    // else: stays STALLED this cycle, waiting its turn in round robin
                                 end 
                             else 
                                 begin
-                                    stall_mask[w] <= thread_stall;  
+                                    stall_mask[w] <= thread_stall;
                                 end
                         end
                     default: state[w] <= READY;
