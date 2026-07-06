@@ -11,7 +11,8 @@ module instruction_decoder (
     output logic [4:0]  rs1_addr,
     output logic [4:0]  rs2_addr,
     output logic        imm_sel,
-    output logic [31:0] immediate  
+    output logic [31:0] immediate,
+    output logic is_mem_op
 );
 
     always @(*) begin
@@ -20,6 +21,7 @@ module instruction_decoder (
         rs1_addr = instruction[22:18];
         rs2_addr = instruction[17:13];
         imm_sel  = instruction[12];
+        is_mem_op = (instruction[31:28] == 4'h8) || (instruction[31:28] == 4'h9); 
 
         immediate = {{20{instruction[11]}}, instruction[11:0]}; // Sign extension to 32-bits
     end

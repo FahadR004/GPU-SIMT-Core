@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module simt_alu_tb;
+module tb_simt_alu;
 
 localparam NUM_LANES   = 16;
 localparam DATA_WIDTH  = 32;
@@ -22,7 +22,7 @@ always #5 clk = ~clk;
 
 initial begin
     $dumpfile("simt_alu.vcd");
-    $dumpvars(0, simt_alu_tb);
+    $dumpvars(0, tb_simt_alu);
 end
 
 int pass_count = 0;
